@@ -1,22 +1,8 @@
-"use client"
-import { useEffect } from "react";
+"use client";
 
-import initPlanet3D from "@/components/3D/planet"
+import Scene from "@/src/components/three/Scene";
 
 export default function Home() {
-
-  useEffect(() => {
-    const {scene, renderer} = initPlanet3D()
-    
-    return () => {
-      if (renderer) {
-        const gl = renderer.getContext();
-        gl.getExtension("WEBGL_lose_context")?.loseContext();
-        renderer.dispose()
-      }
-    }
-  }, [])
-  
   return (
     <div className="page">
       <section className="hero_main">
@@ -30,7 +16,7 @@ export default function Home() {
 
           <button className="cta_btn">Get started.</button>
         </div>
-        <canvas className="planet-3D" />
+        <Scene />
       </section>
     </div>
   );
