@@ -1,0 +1,4 @@
+potsdamer_platz_1k.hdr is the "city" environment used by @react-three/drei.
+It is provided by Poly Haven (formerly HDRI Haven), under CC0 1.0.
+Source: https://github.com/pmndrs/drei-assets/tree/master/hdri
+License: https://polyhaven.com/license
