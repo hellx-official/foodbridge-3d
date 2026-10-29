@@ -2,9 +2,9 @@ import { expect, type Page, test } from "@playwright/test";
 
 type SceneStats = {
   pointCounts: number[];
-  shells: Record<number, { min: number; max: number }>;
   cameraPositions: [number, number, number][];
   hasDepthOfField: boolean;
+  drawCalls: number;
 };
 
 declare global {
@@ -13,116 +13,97 @@ declare global {
   }
 }
 
-// Observe the actual WebGL calls without exposing test-only hooks in the scene.
 async function observeScene(page: Page) {
   await page.addInitScript(() => {
     window.__sceneStats = {
       pointCounts: [],
-      shells: {},
       cameraPositions: [],
       hasDepthOfField: false,
+      drawCalls: 0,
     };
-    const cameraUniforms = new WeakSet<WebGLUniformLocation>();
+    const viewMatrices = new WeakSet<WebGLUniformLocation>();
     for (const context of [WebGLRenderingContext, WebGL2RenderingContext]) {
       const prototype = context.prototype;
       const drawArrays = prototype.drawArrays;
-      const bufferData = prototype.bufferData;
+      const drawElements = prototype.drawElements;
       const getUniformLocation = prototype.getUniformLocation;
-      const uniform3f = prototype.uniform3f;
+      const uniformMatrix4fv = prototype.uniformMatrix4fv;
       const shaderSource = prototype.shaderSource;
-
       prototype.drawArrays = function (mode, first, count) {
         if (
           mode === this.POINTS &&
           !window.__sceneStats.pointCounts.includes(count)
-        ) {
+        )
           window.__sceneStats.pointCounts.push(count);
-        }
         return drawArrays.call(this, mode, first, count);
       };
-      prototype.bufferData = function (
-        this: WebGLRenderingContext,
-        ...args: unknown[]
+      prototype.drawElements = function (
+        this: WebGLRenderingContext | WebGL2RenderingContext,
+        mode: number,
+        count: number,
+        type: number,
+        offset: number,
       ) {
-        const data = args[1];
-        if (
-          data instanceof Float32Array &&
-          [1500, 2400, 6000].includes(data.length)
-        ) {
-          let min = Infinity;
-          let max = 0;
-          for (let i = 0; i < data.length; i += 3) {
-            const radius = Math.hypot(data[i], data[i + 1], data[i + 2]);
-            min = Math.min(min, radius);
-            max = Math.max(max, radius);
-          }
-          if (min >= 7.99 && max <= 12.01) {
-            window.__sceneStats.shells[data.length / 3] = { min, max };
-          }
-        }
-        return Reflect.apply(bufferData, this, args);
-      } as typeof prototype.bufferData;
+        window.__sceneStats.drawCalls += 1;
+        return Reflect.apply(drawElements, this, [mode, count, type, offset]);
+      } as typeof prototype.drawElements;
       prototype.getUniformLocation = function (program, name) {
         const location = getUniformLocation.call(this, program, name);
-        if (location && name === "cameraPosition") cameraUniforms.add(location);
+        if (location && name === "viewMatrix") viewMatrices.add(location);
         return location;
       };
-      prototype.uniform3f = function (location, x, y, z) {
-        if (location && cameraUniforms.has(location)) {
+      prototype.uniformMatrix4fv = function (
+        this: WebGLRenderingContext | WebGL2RenderingContext,
+        location: WebGLUniformLocation | null,
+        transpose: boolean,
+        value: Float32Array | number[],
+        ...rest: unknown[]
+      ) {
+        if (location && viewMatrices.has(location)) {
+          // Recover world-space camera position from the column-major view matrix.
+          const m = value as Float32Array;
+          const x = -(m[0] * m[12] + m[1] * m[13] + m[2] * m[14]);
+          const y = -(m[4] * m[12] + m[5] * m[13] + m[6] * m[14]);
+          const z = -(m[8] * m[12] + m[9] * m[13] + m[10] * m[14]);
           window.__sceneStats.cameraPositions.push([x, y, z]);
-          if (window.__sceneStats.cameraPositions.length > 100) {
+          if (window.__sceneStats.cameraPositions.length > 200)
             window.__sceneStats.cameraPositions.shift();
-          }
         }
-        return uniform3f.call(this, location, x, y, z);
-      };
+        return Reflect.apply(uniformMatrix4fv, this, [
+          location,
+          transpose,
+          value,
+          ...rest,
+        ]);
+      } as typeof prototype.uniformMatrix4fv;
       prototype.shaderSource = function (shader, source) {
-        if (source.includes("cocBuffer") && source.includes("kernel64")) {
+        if (source.includes("cocBuffer") && source.includes("kernel64"))
           window.__sceneStats.hasDepthOfField = true;
-        }
         return shaderSource.call(this, shader, source);
       };
     }
   });
 }
 
-async function waitForParticles(page: Page, mainCount: number) {
+async function waitForParticles(page: Page, green: number, coral: number) {
   await page.waitForFunction(
-    (count) => {
-      const stats = window.__sceneStats;
-      return (
-        stats.pointCounts.includes(count) &&
-        stats.pointCounts.includes(500) &&
-        !!stats.shells[count] &&
-        !!stats.shells[500]
-      );
-    },
-    mainCount,
+    ({ green, coral }) =>
+      window.__sceneStats.pointCounts.includes(green) &&
+      window.__sceneStats.pointCounts.includes(coral),
+    { green, coral },
     { timeout: 45_000 },
   );
+  await expect(
+    page.getByRole("status", { name: "Loading the FoodBridge experience" }),
+  ).toHaveCount(0);
 }
 
-async function expectOriginalContent(page: Page) {
-  await expect(
-    page.getByRole("heading", { name: "Welcome To The New World" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      "AI agents that actually bring value to businesses and elevate workers productivity.",
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Get started." }),
-  ).toBeVisible();
-  await expect(page.locator(".hero_main .planet-3D canvas")).toBeVisible();
-}
-
-test.describe("desktop scene", () => {
-  test.use({ viewport: { width: 900, height: 560 }, deviceScaleFactor: 1 });
-
-  test("preserves content and camera choreography while rendering the cinematic effects", async ({
+test.describe("active motion", () => {
+  test.use({ reducedMotion: "no-preference" });
+  test("desktop renders real WebGL, responds to pointer/scroll, and adapts to mobile", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 900, height: 650 });
     const errors: string[] = [];
     let environmentLoaded = false;
     page.on("pageerror", (error) => errors.push(error.message));
@@ -130,143 +111,90 @@ test.describe("desktop scene", () => {
       if (message.type() === "error") errors.push(message.text());
     });
     page.on("response", (response) => {
-      if (response.url().endsWith("/environment/potsdamer_platz_1k.hdr")) {
+      if (response.url().endsWith("/environment/potsdamer_platz_512.hdr"))
         environmentLoaded = response.ok();
-      }
     });
     await observeScene(page);
     await page.goto("/");
-    await expectOriginalContent(page);
-    await waitForParticles(page, 2000);
-    await page.waitForFunction(
-      () => window.__sceneStats.hasDepthOfField,
-      null,
-      { timeout: 45_000 },
+    await waitForParticles(page, 2000, 500);
+    await expect.poll(() => environmentLoaded).toBe(true);
+    expect(
+      await page.evaluate(() => window.__sceneStats.drawCalls),
+    ).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.__sceneStats.hasDepthOfField)).toBe(
+      false,
     );
-
-    await expect.poll(() => environmentLoaded, { timeout: 30_000 }).toBe(true);
-    const dimensions = await page.evaluate(() => {
-      const hero = document.querySelector(".hero_main") as HTMLElement;
-      const overlay = getComputedStyle(document.body, "::after");
-      return {
-        heroHeight: hero.getBoundingClientRect().height,
-        scrollHeight: document.body.scrollHeight,
-        overlayPosition: overlay.position,
-        overlayPointerEvents: overlay.pointerEvents,
-        overlayOpacity: overlay.opacity,
-      };
-    });
-    expect(dimensions.scrollHeight).toBeCloseTo(dimensions.heroHeight * 2, 0);
-    expect(dimensions.overlayPosition).toBe("fixed");
-    expect(dimensions.overlayPointerEvents).toBe("none");
-    expect(Number(dimensions.overlayOpacity)).toBeCloseTo(0.03);
-
-    // The original text sits behind the transparent canvas. An opaque
-    // post-processing pass would otherwise hide it even though it is "visible" in the DOM.
-    const heading = await page.getByRole("heading").boundingBox();
-    expect(heading).not.toBeNull();
-    const screenshot = (await page.screenshot()).toString("base64");
-    const pixels = await page.evaluate(
-      async ({ screenshot, heading }) => {
-        const image = new Image();
-        image.src = `data:image/png;base64,${screenshot}`;
-        await image.decode();
-        const canvas = document.createElement("canvas");
-        canvas.width = image.width;
-        canvas.height = image.height;
-        const context = canvas.getContext("2d");
-        if (!context || !heading)
-          throw new Error("Could not inspect the screenshot");
-        context.drawImage(image, 0, 0);
-        const corner = context.getImageData(5, 5, 1, 1).data;
-        const text = context.getImageData(
-          Math.max(0, Math.floor(heading.x)),
-          Math.max(0, Math.floor(heading.y)),
-          Math.ceil(heading.width),
-          Math.ceil(heading.height),
-        ).data;
-        let darkTextPixels = 0;
-        for (let i = 0; i < text.length; i += 4) {
-          if (text[i] < 60 && text[i + 1] < 60 && text[i + 2] < 60)
-            darkTextPixels++;
-        }
-        return { corner: Array.from(corner), darkTextPixels };
-      },
-      { screenshot, heading },
-    );
-    expect(pixels.corner[0]).toBeGreaterThan(180);
-    expect(pixels.darkTextPixels).toBeGreaterThan(100);
-
+    expect(
+      await page.evaluate(
+        () => document.querySelector(".css-globe")?.checkVisibility() ?? false,
+      ),
+    ).toBe(false);
     await page.mouse.move(850, 60);
     await page.waitForFunction(
       () =>
         window.__sceneStats.cameraPositions.some(
-          ([x, y, z]) => z === 4.5 && x > 0.01 && y > 2.155,
+          ([x, y, z]) => x > 0.1 && y > 0.05 && Math.abs(z - 8) < 0.15,
         ),
       null,
       { timeout: 30_000 },
     );
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.evaluate(() =>
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "instant" }),
+    );
     await page.waitForFunction(
-      () =>
-        window.__sceneStats.cameraPositions.some(
-          ([, , z]) => Math.abs(z - 19) < 0.02,
-        ),
+      () => window.__sceneStats.cameraPositions.some(([, , z]) => z > 11.3),
       null,
       { timeout: 30_000 },
     );
-    await expect(page.locator(".content")).toHaveCSS("opacity", "0", {
-      timeout: 30_000,
-    });
-
     await page.setViewportSize({ width: 390, height: 844 });
-    await waitForParticles(page, 800);
+    await waitForParticles(page, 640, 160);
     expect(errors).toEqual([]);
-  });
-
-  test("disables pointer parallax when reduced motion is preferred", async ({
-    page,
-  }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await observeScene(page);
-    await page.goto("/");
-    await waitForParticles(page, 2000);
-    await page.waitForFunction(
-      () => window.__sceneStats.cameraPositions.length > 0,
-    );
-    await page.mouse.move(850, 60);
-    await page.waitForTimeout(2_000);
-    const camera = await page.evaluate(() =>
-      window.__sceneStats.cameraPositions.at(-1),
-    );
-    expect(camera).toBeDefined();
-    expect(camera?.[0]).toBeCloseTo(0, 3);
-    expect(camera?.[1]).toBeCloseTo(2.15, 3);
-    expect(camera?.[2]).toBeCloseTo(4.5, 3);
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForFunction(
-      () =>
-        window.__sceneStats.cameraPositions.some(
-          ([x, y, z]) =>
-            Math.abs(x) < 0.01 &&
-            Math.abs(y - 0.1) < 0.01 &&
-            Math.abs(z - 19) < 0.02,
-        ),
-      null,
-      { timeout: 30_000 },
-    );
   });
 });
 
-test.describe("mobile scene", () => {
+test.describe("retina", () => {
+  test.use({ deviceScaleFactor: 2 });
+  test("desktop canvas uses DPR up to 2", async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 600 });
+    await observeScene(page);
+    await page.goto("/");
+    await waitForParticles(page, 2000, 500);
+    const ratio = await page.evaluate(() => {
+      const canvas = document.querySelector("canvas");
+      return canvas ? canvas.width / canvas.getBoundingClientRect().width : 0;
+    });
+    expect(ratio).toBeCloseTo(2, 1);
+  });
+});
+
+test("reduced motion disables camera parallax and scroll travel", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 650 });
+  await observeScene(page);
+  await page.goto("/");
+  await waitForParticles(page, 2000, 500);
+  await page.mouse.move(850, 60);
+  await page.evaluate(() =>
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "instant" }),
+  );
+  await page.waitForTimeout(1200);
+  const camera = await page.evaluate(() =>
+    window.__sceneStats.cameraPositions.at(-1),
+  );
+  expect(camera?.[0]).toBeCloseTo(0, 3);
+  expect(camera?.[1]).toBeCloseTo(0, 3);
+  expect(camera?.[2]).toBeCloseTo(8, 3);
+});
+
+test.describe("mobile", () => {
   test.use({
     viewport: { width: 390, height: 844 },
-    deviceScaleFactor: 1,
+    deviceScaleFactor: 2,
     isMobile: true,
     hasTouch: true,
   });
-
-  test("uses the mobile particle budget and original mobile scroll target", async ({
+  test("caps DPR at 1 and renders 800 total particles without depth-of-field", async ({
     page,
   }) => {
     const errors: string[] = [];
@@ -276,27 +204,36 @@ test.describe("mobile scene", () => {
     });
     await observeScene(page);
     await page.goto("/");
-    await expectOriginalContent(page);
-    await waitForParticles(page, 800);
+    await waitForParticles(page, 640, 160);
+    const ratio = await page.evaluate(() => {
+      const canvas = document.querySelector("canvas");
+      return canvas ? canvas.width / canvas.getBoundingClientRect().width : 0;
+    });
+    expect(ratio).toBeCloseTo(1, 1);
     expect(await page.evaluate(() => window.__sceneStats.hasDepthOfField)).toBe(
       false,
     );
-    await page.getByRole("button", { name: "Get started." }).click();
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForFunction(
-      () =>
-        window.__sceneStats.cameraPositions.some(
-          ([x, y, z]) =>
-            Math.abs(x - 0.1) < 0.01 &&
-            Math.abs(y - 0.1) < 0.01 &&
-            Math.abs(z - 30) < 0.02,
-        ),
-      null,
-      { timeout: 30_000 },
-    );
-    await expect(page.locator(".content")).toHaveCSS("opacity", "0", {
-      timeout: 30_000,
-    });
     expect(errors).toEqual([]);
   });
+});
+
+test("keeps the DOM usable when WebGL is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      type: string,
+      ...args: unknown[]
+    ) {
+      if (type.includes("webgl")) return null;
+      return Reflect.apply(original, this, [type, ...args]);
+    } as typeof original;
+  });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator(".css-globe")).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Loading the FoodBridge experience" }),
+  ).toHaveCount(0);
+  await expect(page.locator("#live-rescues article")).toHaveCount(6);
 });

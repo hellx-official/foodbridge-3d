@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html {
+    scroll-padding-top: 5rem;
+  }
+  body {
+    @apply m-0 bg-forest font-sans text-cream;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button,
+  a {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-2 focus-visible:ring-offset-forest;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  section {
+    scroll-margin-top: 5rem;
+  }
+  ::selection {
+    background: #2d6a4f;
+    color: #fefae0;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0a1f0a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2d6a4f;
+    border-radius: 3px;
+  }
+  dialog::backdrop {
+    background: rgb(0 0 0 / 72%);
+    backdrop-filter: blur(6px);
+  }
+}
+
+@layer components {
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[110] focus:rounded-lg focus:bg-cream focus:px-5 focus:py-3 focus:font-semibold focus:text-forest;
+  }
+  .section-title {
+    @apply font-heading text-3xl font-bold tracking-tight md:text-5xl;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-sage;
+  }
+  .body-copy {
+    @apply text-base leading-relaxed text-cream/80 md:text-lg;
+  }
+  .glass-card {
+    @apply rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-md md:p-8;
+  }
+  .button-primary {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold tracking-wide text-white transition hover:bg-primary/80 hover:shadow-lg hover:shadow-primary/20;
+  }
+  .button-secondary {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-cream/30 bg-forest/30 px-6 py-3 text-sm font-semibold tracking-wide text-cream transition hover:border-sage/60 hover:bg-white/5;
+  }
+  .button-coral {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-coral px-5 py-2 text-sm font-semibold tracking-wide text-forest transition-transform hover:scale-105;
+  }
+  .field {
+    @apply w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-cream placeholder:text-cream/60 focus:border-sage/50 focus:outline-none focus:ring-2 focus:ring-sage/30;
+  }
+  .field-label {
+    @apply mb-2 block text-sm font-medium text-cream/80;
+  }
+  .icon-button {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-full transition hover:bg-white/10;
+  }
+}
+
+.noise::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.hero-shade {
+  background: radial-gradient(
+    ellipse at center,
+    rgb(10 31 10 / 82%) 0%,
+    rgb(10 31 10 / 58%) 38%,
+    transparent 72%
+  );
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
+}
+
+.css-globe {
+  width: min(52vw, 420px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 30% 25%,
+    #52b788 0%,
+    #2d6a4f 30%,
+    #1b4332 58%,
+    #0a1f0a 80%
+  );
+  box-shadow:
+    inset -24px -20px 60px #0a1f0a,
+    0 0 90px rgb(82 183 136 / 12%);
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
