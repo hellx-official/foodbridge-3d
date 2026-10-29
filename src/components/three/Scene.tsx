@@ -1,84 +1,129 @@
 "use client";
 
 import { Environment } from "@react-three/drei";
-import { Canvas, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useState } from "react";
-import CameraRig from "./CameraRig";
-import Effects from "./Effects";
-import Food from "./Food";
-import Globe from "./Globe";
-import OrbitAccents from "./OrbitAccents";
-import Particles from "./Particles";
+import { Canvas } from "@react-three/fiber";
+import dynamic from "next/dynamic";
+import {
+  Component,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+import LoadingScreen from "@/components/LoadingScreen";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import type { SceneSettings } from "@/types";
 
-function useReducedMotion() {
-  const [reducedMotion, setReducedMotion] = useState(false);
+// Each WebGL module has its own browser-only boundary. Nothing in the Three
+// dependency graph is evaluated during the server render.
+const Globe = dynamic(() => import("./Globe"), { ssr: false });
+const FoodItems = dynamic(() => import("./FoodItems"), { ssr: false });
+const Particles = dynamic(() => import("./Particles"), { ssr: false });
+const CameraRig = dynamic(() => import("./CameraRig"), { ssr: false });
+const Effects = dynamic(() => import("./Effects"), { ssr: false });
+
+function CssFallback({ onReady }: { onReady: () => void }) {
   useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReducedMotion(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  return reducedMotion;
+    onReady();
+  }, [onReady]);
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-forest">
+      <div className="css-globe" />
+    </div>
+  );
 }
 
-function World() {
-  const mobile = useThree((state) => state.size.width <= 768);
-  const reducedMotion = useReducedMotion();
+class SceneBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: Error) {
+    console.warn("FoodBridge is using its CSS fallback:", error.message);
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
+function World({ mobile, reducedMotion }: SceneSettings) {
   return (
     <>
+      <color attach="background" args={["#0A1F0A"]} />
+      <fog attach="fog" args={["#0A1F0A", 8, 30]} />
       <CameraRig reducedMotion={reducedMotion} />
-      {/* The local file is drei's city preset, served without a CDN dependency. */}
-      <Suspense fallback={null}>
-        <Environment files="/environment/potsdamer_platz_1k.hdr" />
-      </Suspense>
-      <directionalLight position={[5, 5, 5]} intensity={2} castShadow />
-      <pointLight position={[-5, -3, -5]} intensity={1} color="#2D6A4F" />
-      <spotLight
-        position={[0, 10, 0]}
-        angle={0.3}
-        penumbra={1}
-        intensity={1.5}
-        color="#FEFAE0"
+      {!mobile && (
+        <Suspense fallback={null}>
+          {/* Drei's city preset, served locally to avoid a runtime CDN.
+              Mobile uses the simpler direct-light setup below. */}
+          <Environment
+            files="/environment/potsdamer_platz_512.hdr"
+            environmentIntensity={0.8}
+          />
+        </Suspense>
+      )}
+      <ambientLight intensity={0.3} />
+      <directionalLight position={[5, 5, 5]} intensity={2} color="#FEFAE0" />
+      <pointLight
+        position={[-4, 2, 3]}
+        intensity={18}
+        distance={20}
+        color="#52B788"
       />
+      {!mobile && (
+        <spotLight
+          position={[4, 6, 5]}
+          intensity={35}
+          distance={25}
+          angle={0.5}
+          penumbra={1}
+          color="#FEFAE0"
+        />
+      )}
       <Suspense fallback={null}>
-        <Globe reducedMotion={reducedMotion} />
+        <Globe reducedMotion={reducedMotion} mobile={mobile} />
+        <FoodItems mobile={mobile} reducedMotion={reducedMotion} />
+        <Particles mobile={mobile} reducedMotion={reducedMotion} />
       </Suspense>
-      <OrbitAccents reducedMotion={reducedMotion} />
-      <Food mobile={mobile} reducedMotion={reducedMotion} />
-      <Particles mobile={mobile} reducedMotion={reducedMotion} />
-      <Effects mobile={mobile} />
+      {!mobile && <Effects />}
     </>
   );
 }
 
 export default function Scene() {
-  // Keep the old canvas's inline layout and straight-ahead camera framing;
-  // Fiber otherwise defaults to a block wrapper and lookAt(0, 0, 0).
+  const mobile = useMediaQuery("(max-width: 767px)");
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const [ready, setReady] = useState(false);
+  const onReady = useCallback(() => setReady(true), []);
+
   return (
-    <Canvas
-      className="planet-3D"
-      style={{
-        display: "inline-block",
-        height: "100vh",
-        width: "100%",
-        pointerEvents: "none",
-      }}
-      camera={{
-        fov: 15,
-        near: 0.1,
-        far: 10000,
-        position: [0, 2.15, 4.5],
-        rotation: [0, 0, 0],
-      }}
-      dpr={[1, 1.5]}
-      gl={{ antialias: true, alpha: true }}
-      shadows
-      aria-hidden="true"
-      fallback={null}
-    >
-      <World />
-    </Canvas>
+    <SceneBoundary fallback={<CssFallback onReady={onReady} />}>
+      <Canvas
+        camera={{ position: [0, 0, 8], fov: 45, near: 0.1, far: 100 }}
+        dpr={mobile ? [1, 1] : [1, 2]}
+        gl={{
+          antialias: true,
+          alpha: false,
+          powerPreference: mobile ? "low-power" : "high-performance",
+        }}
+        frameloop="always"
+        resize={{ scroll: false }}
+        style={{ width: "100%", height: "100%", pointerEvents: "none" }}
+        aria-hidden="true"
+        fallback={<CssFallback onReady={onReady} />}
+        onCreated={({ gl }) => {
+          gl.setClearColor("#0A1F0A", 1);
+          gl.domElement.setAttribute("aria-hidden", "true");
+          onReady();
+        }}
+      >
+        <World mobile={mobile} reducedMotion={reducedMotion} />
+      </Canvas>
+      <LoadingScreen ready={ready} />
+    </SceneBoundary>
   );
 }

@@ -1,36 +1,51 @@
 {
-  "name": "3d_planet_hero",
-  "version": "0.1.0",
+  "name": "foodbridge-3d",
+  "version": "1.0.0",
   "private": true,
+  "description": "Rescue Food. Feed People. Zero Waste. An immersive food-rescue frontend.",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
-    "start": "next start",
-    "lint": "biome check",
-    "format": "biome format --write",
-    "test:scene": "playwright test"
+    "start": "next start -H 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src tests *.ts *.mjs",
+    "format": "biome format --write src tests *.ts *.mjs",
+    "test": "playwright test",
+    "test:scene": "playwright test tests/scene.spec.ts"
   },
+  "engines": { "node": ">=18.17.0" },
   "dependencies": {
-    "@react-three/drei": "^10.7.9",
-    "@react-three/fiber": "^9.8.2",
-    "@react-three/postprocessing": "^3.2.2",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "@react-three/postprocessing": "^2.19.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.18.2",
     "gsap": "^3.13.0",
     "lenis": "^1.3.13",
-    "next": "16.0.1",
-    "postprocessing": "^6.39.5",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "three": "^0.181.0"
+    "lucide-react": "^0.468.0",
+    "next": "14.2.35",
+    "postprocessing": "^6.36.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tailwind-merge": "^2.6.0",
+    "three": "^0.170.0"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
     "@biomejs/biome": "2.2.0",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.10",
     "@playwright/test": "^1.64.1",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/three": "^0.181.0",
-    "babel-plugin-react-compiler": "1.0.0",
-    "raw-loader": "^4.0.2",
-    "typescript": "^5"
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.170.0",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
   }
 }

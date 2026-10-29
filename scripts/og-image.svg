@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="bg" cx="78%" cy="45%" r="70%"><stop offset="0" stop-color="#1B4332"/><stop offset="1" stop-color="#0A1F0A"/></radialGradient>
+    <radialGradient id="globe" cx="32%" cy="25%" r="80%"><stop offset="0" stop-color="#52B788"/><stop offset=".45" stop-color="#2D6A4F"/><stop offset="1" stop-color="#0A1F0A"/></radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g fill="none" stroke="#52B788" opacity=".12"><circle cx="940" cy="310" r="260"/><circle cx="940" cy="310" r="310"/><ellipse cx="940" cy="310" rx="330" ry="95" transform="rotate(-25 940 310)"/></g>
+  <circle cx="940" cy="310" r="185" fill="url(#globe)"/>
+  <g fill="none" stroke="#FEFAE0" opacity=".13"><path d="M805 185 940 125 1070 200 1125 310 1060 430 940 495 815 425 755 310Z"/><path d="M805 185 865 300 815 425M940 125 980 245 1070 200M980 245 1125 310 1010 370 1060 430M865 300 980 245 1010 370 940 495 865 300 755 310"/></g>
+  <ellipse cx="940" cy="310" rx="265" ry="72" transform="rotate(-25 940 310)" fill="none" stroke="#52B788" stroke-width="2" opacity=".6"/>
+  <circle cx="701" cy="421" r="6" fill="#FF6B6B"/>
+  <g font-family="Arial, sans-serif">
+    <path d="M76 82C72 66 88 58 104 59c1 17-8 30-22 27" fill="#52B788"/><path d="M75 92 96 70" stroke="#0A1F0A" stroke-width="3" stroke-linecap="round"/><text x="118" y="92" fill="#FEFAE0" font-size="30" font-weight="700">FoodBridge</text>
+    <text x="72" y="245" fill="#FEFAE0" font-size="76" font-weight="700" letter-spacing="-3">Rescue Food.</text>
+    <text x="72" y="335" fill="#52B788" font-size="76" font-weight="700" letter-spacing="-3">Feed People.</text>
+    <text x="72" y="425" fill="#FEFAE0" font-size="76" font-weight="700" letter-spacing="-3">Zero Waste.</text>
+    <text x="76" y="500" fill="#FEFAE0" opacity=".7" font-size="22">Good food. Greater good.</text>
+    <text x="76" y="565" fill="#52B788" font-size="17" letter-spacing="3">12,400+ MEALS RESCUED · ILLUSTRATIVE IMPACT</text>
+  </g>
+</svg>

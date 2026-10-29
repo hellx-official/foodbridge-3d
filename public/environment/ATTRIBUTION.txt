@@ -1,4 +1,6 @@
 potsdamer_platz_1k.hdr is the "city" environment used by @react-three/drei.
+potsdamer_platz_512.hdr is a 512x256 box-downsampled derivative of the same
+CC0 image, used at runtime to reduce bandwidth and PMREM filtering cost.
 It is provided by Poly Haven (formerly HDRI Haven), under CC0 1.0.
 Source: https://github.com/pmndrs/drei-assets/tree/master/hdri
 License: https://polyhaven.com/license

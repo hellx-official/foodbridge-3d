@@ -1,124 +1,86 @@
-import { MeshDistortMaterial, useTexture } from "@react-three/drei";
-import { useFrame, useThree } from "@react-three/fiber";
-import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
-import * as THREE from "three";
-import atmosphereFragment from "@/components/3D/shaders/atmosphere/fragment.glsl";
-import atmosphereVertex from "@/components/3D/shaders/atmosphere/vertex.glsl";
+"use client";
 
-export default function Globe({ reducedMotion }: { reducedMotion: boolean }) {
-  const globe = useRef<THREE.Group>(null);
-  const gl = useThree((state) => state.gl);
-  const [day, night, clouds] = useTexture([
-    "/earth/day.jpg",
-    "/earth/night.jpg",
-    "/earth/specularClouds.jpg",
-  ]);
+import { MeshDistortMaterial } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
+import { useRef } from "react";
+import type { Group } from "three";
 
-  useLayoutEffect(() => {
-    day.colorSpace = THREE.SRGBColorSpace;
-    night.colorSpace = THREE.SRGBColorSpace;
-    for (const texture of [day, night, clouds]) {
-      texture.anisotropy = Math.min(gl.capabilities.getMaxAnisotropy(), 8);
-      texture.needsUpdate = true;
-    }
-  }, [clouds, day, gl, night]);
-
-  // Keep the geographic detail legible while retaining an emerald cast.
-  // Chain drei's distortion shader rather than replacing it.
-  const tuneEarthMaterial = useCallback(
-    (material: THREE.MeshPhysicalMaterial | null) => {
-      if (!material || material.userData.earthTintConfigured) return;
-      material.userData.earthTintConfigured = true;
-      const distortShader = material.onBeforeCompile.bind(material);
-      material.onBeforeCompile = (shader, renderer) => {
-        distortShader(shader, renderer);
-        shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <map_fragment>",
-          `#include <map_fragment>
-        #ifdef USE_MAP
-          vec3 greenMap = sampledDiffuseColor.rgb * vec3(0.75, 1.0, 0.3);
-          diffuseColor.rgb = mix(diffuseColor.rgb, greenMap, 0.38);
-        #endif`,
-        );
-      };
-      material.customProgramCacheKey = () => "foodbridge-earth-tint-v1";
-      material.needsUpdate = true;
-    },
-    [],
-  );
-
-  const atmosphereUniforms = useMemo(
-    () => ({
-      uOpacity: { value: 0.62 },
-      uSunDirection: { value: new THREE.Vector3(5, 5, 5).normalize() },
-      uAtmosphereDayColor: { value: new THREE.Color("#95e8bd") },
-      uAtmosphereTwilightColor: { value: new THREE.Color("#2d6a4f") },
-    }),
-    [],
-  );
-
-  useFrame((state) => {
-    if (globe.current && !reducedMotion) {
-      globe.current.rotation.y = state.clock.elapsedTime * 0.2;
-    }
+export default function Globe({
+  reducedMotion,
+  mobile,
+}: {
+  reducedMotion: boolean;
+  mobile: boolean;
+}) {
+  const globe = useRef<Group>(null);
+  useFrame((_, delta) => {
+    if (globe.current && !reducedMotion)
+      globe.current.rotation.y += Math.min(delta, 0.1) * 0.08;
   });
 
   return (
-    <group>
-      <group ref={globe}>
-        {/* The translucent surface lets a little of the inner light show through. */}
+    <group scale={mobile ? 0.68 : 1}>
+      <group ref={globe} rotation={[0.12, 0.4, 0.08]}>
         <mesh renderOrder={0}>
-          <sphereGeometry args={[1.85, 64, 48]} />
+          <sphereGeometry args={[1.8, 32, 24]} />
+          <meshBasicMaterial
+            color="#52B788"
+            transparent
+            opacity={0.15}
+            depthWrite={false}
+          />
+        </mesh>
+        <mesh renderOrder={1}>
+          <icosahedronGeometry args={[2, 2]} />
+          <MeshDistortMaterial
+            color="#2D6A4F"
+            distort={0.15}
+            speed={reducedMotion ? 0 : 1.5}
+            roughness={0.3}
+            metalness={0.2}
+            flatShading
+            transparent
+            opacity={0.95}
+            envMapIntensity={1.1}
+          />
+        </mesh>
+        <mesh renderOrder={2}>
+          <icosahedronGeometry args={[2.025, 2]} />
+          <meshBasicMaterial
+            color="#52B788"
+            wireframe
+            transparent
+            opacity={0.09}
+            depthWrite={false}
+          />
+        </mesh>
+      </group>
+      <group rotation={[1.15, 0.12, -0.25]}>
+        <mesh>
+          <torusGeometry args={[2.5, 0.006, 6, 128]} />
+          <meshBasicMaterial
+            color="#52B788"
+            transparent
+            opacity={0.35}
+            depthWrite={false}
+          />
+        </mesh>
+        <mesh position={[2.5, 0, 0]}>
+          <sphereGeometry args={[0.035, 12, 8]} />
           <meshStandardMaterial
             color="#52B788"
             emissive="#52B788"
             emissiveIntensity={1.2}
-            transparent
-            opacity={0.3}
-            depthWrite={false}
-          />
-        </mesh>
-        <mesh castShadow receiveShadow renderOrder={1}>
-          <sphereGeometry args={[2, 128, 96]} />
-          <MeshDistortMaterial
-            ref={tuneEarthMaterial}
-            map={day}
-            color="#2D6A4F"
-            emissive="#a8ffd2"
-            emissiveMap={night}
-            emissiveIntensity={0.45}
-            distort={0.2}
-            speed={reducedMotion ? 0 : 1.5}
-            roughness={0.3}
-            metalness={0.1}
-            envMapIntensity={0.65}
-            specularIntensity={0.5}
-            transparent
-            opacity={0.96}
-          />
-        </mesh>
-        <mesh renderOrder={2}>
-          <sphereGeometry args={[2.025, 96, 64]} />
-          <MeshDistortMaterial
-            color="#e7fff1"
-            alphaMap={clouds}
-            distort={0.2}
-            speed={reducedMotion ? 0 : 1.5}
-            transparent
-            opacity={0.13}
-            depthWrite={false}
-            roughness={0.8}
+            toneMapped={false}
           />
         </mesh>
       </group>
-      <mesh scale={1.13} renderOrder={3}>
-        <sphereGeometry args={[2, 96, 64]} />
-        <shaderMaterial
-          vertexShader={atmosphereVertex}
-          fragmentShader={atmosphereFragment}
-          uniforms={atmosphereUniforms}
-          side={THREE.BackSide}
+      <mesh rotation={[0.8, 0.65, 0.4]}>
+        <torusGeometry args={[2.7, 0.004, 6, 128]} />
+        <meshBasicMaterial
+          color="#FF6B6B"
           transparent
+          opacity={0.14}
           depthWrite={false}
         />
       </mesh>
